@@ -1,4 +1,4 @@
-import { useState , useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Typography,
   Button,
@@ -55,11 +55,120 @@ const CreateEventPage = () => {
       auctionDate: "",
       auctionTime: "",
       duration: "",
+      benefitsToSponsors: [], // Add this new field
+      images: [], // Add this for tracking images to be uploaded
+      uploadedImages: [],
     },
   ]);
 
   const steps = ["Event Details", "Auction Details"];
   const navigate = useNavigate();
+
+  const saveFormState = useCallback(() => {
+    try {
+      const formState = {
+        eventData,
+        auctions,
+        activeStep,
+        // Don't save file objects as they can't be serialized
+        lastSaved: new Date().toISOString(),
+      };
+      localStorage.setItem("eventFormData", JSON.stringify(formState));
+    } catch (error) {
+      console.error("Error saving form state:", error);
+    }
+  }, [eventData, auctions, activeStep]);
+
+  // Function to load form state from localStorage
+
+  const loadFormState = () => {
+    try {
+      const savedState = localStorage.getItem('eventFormData');
+      if (savedState) {
+        const parsedState = JSON.parse(savedState);
+        
+        // We can't restore actual File objects, so we need to set images array to empty
+        // but keep the uploadedImages URLs
+        const modifiedAuctions = parsedState.auctions.map(auction => ({
+          ...auction,
+          images: [] // Reset images array as we can't restore File objects
+        }));
+        
+        setEventData(parsedState.eventData);
+        setAuctions(modifiedAuctions);
+        setActiveStep(parsedState.activeStep);
+        //setLastSaved(new Date(parsedState.lastSaved));
+        
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Error loading form state:", error);
+      return false;
+    }
+  };
+
+  // Function to clear saved form state
+  const clearFormState = () => {
+    localStorage.removeItem("eventFormData");
+  };
+
+  // Auto-save form state whenever it changes
+  useEffect(() => {
+    // Don't save if the form is empty (initial state)
+    if (eventData.title || auctions[0].itemName || activeStep > 0) {
+      const debounceTimer = setTimeout(() => {
+        saveFormState();
+      }, 1000); // Save 1 second after the last change
+
+      return () => clearTimeout(debounceTimer);
+    }
+  }, [eventData, auctions, activeStep, saveFormState]);
+
+  // Check for saved data when component mounts
+  useEffect(() => {
+    // Only try to restore if we're at the beginning state
+    if (activeStep === 0 && !eventData.title && !auctions[0].itemName) {
+      const hasRestoredData = loadFormState();
+
+      if (hasRestoredData) {
+        // Show notification about restored data
+        const confirmed = window.confirm(
+          "We found your previously unsaved form data. Would you like to restore it?"
+        );
+
+        if (!confirmed) {
+          // If user doesn't want to restore, clear saved data
+          clearFormState();
+          // Reset form to initial state
+          setEventData({
+            title: "",
+            description: "",
+            eventType: "IN_PERSON",
+            location: "",
+            date: "",
+            benefitsToSponsors: [],
+            pastEventsImages: [],
+          });
+          setAuctions([
+            {
+              itemName: "",
+              itemDescription: "",
+              startingBid: "",
+              bidIncrement: "",
+              auctionDate: "",
+              auctionTime: "",
+              duration: "",
+              benefitsToSponsors: [],
+              images: [],
+              uploadedImages: [],
+            },
+          ]);
+          setActiveStep(0);
+        }
+      }
+    }
+  }, [activeStep, auctions, eventData.title]);
 
   // Drag-and-drop image handling
   const onDrop = useCallback(
@@ -72,6 +181,113 @@ const CreateEventPage = () => {
     },
     [images]
   );
+
+  // Benefit handlers for auctions
+  const handleAddAuctionBenefit = (auctionIndex) => {
+    const updatedAuctions = [...auctions];
+    updatedAuctions[auctionIndex].benefitsToSponsors.push("");
+    setAuctions(updatedAuctions);
+  };
+
+  const handleAuctionBenefitChange = (auctionIndex, benefitIndex, e) => {
+    const updatedAuctions = [...auctions];
+    updatedAuctions[auctionIndex].benefitsToSponsors[benefitIndex] =
+      e.target.value;
+    setAuctions(updatedAuctions);
+  };
+
+  const handleRemoveAuctionBenefit = (auctionIndex, benefitIndex) => {
+    const updatedAuctions = [...auctions];
+    updatedAuctions[auctionIndex].benefitsToSponsors = updatedAuctions[
+      auctionIndex
+    ].benefitsToSponsors.filter((_, i) => i !== benefitIndex);
+    setAuctions(updatedAuctions);
+  };
+
+  // Image handlers for auctions
+  const onAuctionImageDrop = useCallback((acceptedFiles, auctionIndex) => {
+    setAuctions((prevAuctions) => {
+      const updatedAuctions = [...prevAuctions];
+      const currentAuction = { ...updatedAuctions[auctionIndex] };
+
+      if (currentAuction.images.length + acceptedFiles.length > 5) {
+        alert("You can only upload up to 5 images per auction item.");
+        return prevAuctions;
+      }
+
+      currentAuction.images = [...currentAuction.images, ...acceptedFiles];
+      updatedAuctions[auctionIndex] = currentAuction;
+      return updatedAuctions;
+    });
+  }, []);
+
+  const handleAuctionImageUpload = async (auctionIndex) => {
+    const currentAuction = auctions[auctionIndex];
+    if (currentAuction.images.length === 0) {
+      alert("Please select images to upload for this auction item.");
+      return;
+    }
+
+    setUploading(true);
+    const uploadedImageUrls = [];
+
+    try {
+      for (let image of currentAuction.images) {
+        const formData = new FormData();
+        formData.append("file", image);
+        formData.append("upload_preset", UPLOAD_PRESET);
+
+        const response = await axios.post(CLOUDINARY_URL, formData);
+        uploadedImageUrls.push(response.data.secure_url);
+      }
+
+      setAuctions((prevAuctions) => {
+        const updatedAuctions = [...prevAuctions];
+        updatedAuctions[auctionIndex] = {
+          ...updatedAuctions[auctionIndex],
+          uploadedImages: [
+            ...(updatedAuctions[auctionIndex].uploadedImages || []),
+            ...uploadedImageUrls,
+          ],
+          images: [], // Clear the temporary images
+        };
+        return updatedAuctions;
+      });
+
+      alert("Auction images uploaded successfully!");
+    } catch (error) {
+      console.error("Image upload failed:", error);
+      alert("Failed to upload some auction images.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeAuctionImage = (auctionIndex, imageIndex) => {
+    setAuctions((prevAuctions) => {
+      const updatedAuctions = [...prevAuctions];
+      const updatedImages = [...updatedAuctions[auctionIndex].images];
+      updatedImages.splice(imageIndex, 1);
+      updatedAuctions[auctionIndex] = {
+        ...updatedAuctions[auctionIndex],
+        images: updatedImages,
+      };
+      return updatedAuctions;
+    });
+  };
+
+  const removeUploadedAuctionImage = (auctionIndex, imageIndex) => {
+    setAuctions((prevAuctions) => {
+      const updatedAuctions = [...prevAuctions];
+      const updatedImages = [...updatedAuctions[auctionIndex].uploadedImages];
+      updatedImages.splice(imageIndex, 1);
+      updatedAuctions[auctionIndex] = {
+        ...updatedAuctions[auctionIndex],
+        uploadedImages: updatedImages,
+      };
+      return updatedAuctions;
+    });
+  };
 
   const { getRootProps, getInputProps } = useDropzone({
     onDrop,
@@ -222,6 +438,9 @@ const CreateEventPage = () => {
         auctionDate: "",
         auctionTime: "",
         duration: "",
+        benefitsToSponsors: [], // Add this new field
+        images: [], // Add this for tracking images to be uploaded
+        uploadedImages: [], // Add this for storing uploaded image URLs
       },
     ]);
   };
@@ -293,6 +512,8 @@ const CreateEventPage = () => {
       auctionTime: auction.auctionTime,
       duration: parseInt(auction.duration),
       status: "UPCOMING",
+      benefitsToSponsors: auction.benefitsToSponsors,
+      images: auction.uploadedImages,
     }));
 
     formData.append("auctions", JSON.stringify(formattedAuctions));
@@ -327,8 +548,9 @@ const CreateEventPage = () => {
           },
         }
       );
-      //console.log(formData);
+      console.log(formData);
       console.log("Event created successfully:", response.data);
+      
       navigate("/events");
     } catch (error) {
       console.error(
@@ -659,6 +881,246 @@ const CreateEventPage = () => {
                       }}
                       required
                     />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="h6">Benefits to Sponsors</Typography>
+                    {auction.benefitsToSponsors.map((benefit, benefitIndex) => (
+                      <Box
+                        key={benefitIndex}
+                        display="flex"
+                        alignItems="center"
+                        gap={1}
+                        mt={1}
+                      >
+                        <TextField
+                          fullWidth
+                          label={`Benefit ${benefitIndex + 1}`}
+                          variant="outlined"
+                          value={benefit}
+                          onChange={(e) =>
+                            handleAuctionBenefitChange(index, benefitIndex, e)
+                          }
+                        />
+                        <IconButton
+                          onClick={() =>
+                            handleRemoveAuctionBenefit(index, benefitIndex)
+                          }
+                          color="error"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Box>
+                    ))}
+                    <Button
+                      variant="outlined"
+                      startIcon={<AddIcon />}
+                      onClick={() => handleAddAuctionBenefit(index)}
+                      sx={{ mt: 2 }}
+                    >
+                      Add Benefit
+                    </Button>
+                  </Grid>
+
+                  {/* Image upload section for auctions */}
+                  <Grid item xs={12}>
+                    <Typography variant="h6">
+                      Upload Auction Images (Max 5)
+                    </Typography>
+                    <Box
+                      sx={{
+                        border: "2px dashed gray",
+                        borderRadius: 2,
+                        p: 3,
+                        textAlign: "center",
+                        cursor: "pointer",
+                        bgcolor: "rgba(0,0,0,0.02)",
+                        transition: "all 0.3s ease-in-out",
+                        "&:hover": {
+                          bgcolor: "rgba(0,0,0,0.04)",
+                          borderColor: "primary.main",
+                        },
+                      }}
+                      {...{
+                        onClick: () => {
+                          const input = document.createElement("input");
+                          input.type = "file";
+                          input.multiple = true;
+                          input.accept = "image/*";
+                          input.onchange = (e) => {
+                            if (e.target.files) {
+                              onAuctionImageDrop(
+                                Array.from(e.target.files),
+                                index
+                              );
+                            }
+                          };
+                          input.click();
+                        },
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          gap: 1,
+                        }}
+                      >
+                        <AddIcon color="primary" fontSize="large" />
+                        <Typography color="primary" variant="h6">
+                          Drop files here or click to upload
+                        </Typography>
+                        {/* <Typography variant="body2" color="textSecondary">
+                          Supports: JPG, PNG, GIF (max 5 files)
+                        </Typography> */}
+                      </Box>
+                    </Box>
+
+                    {/* Auction image previews - improved UI */}
+                    {auction.images.length > 0 && (
+                      <Box mt={2}>
+                        <Typography variant="subtitle1" gutterBottom>
+                          Selected Images:
+                        </Typography>
+                        <Grid container spacing={2}>
+                          {auction.images.map((file, imageIndex) => (
+                            <Grid item xs={6} sm={4} md={3} key={imageIndex}>
+                              <Paper
+                                elevation={2}
+                                sx={{
+                                  position: "relative",
+                                  height: 120,
+                                  overflow: "hidden",
+                                  borderRadius: 2,
+                                }}
+                              >
+                                <img
+                                  src={URL.createObjectURL(file)}
+                                  alt={`preview-${imageIndex}`}
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                  }}
+                                />
+                                <IconButton
+                                  onClick={() =>
+                                    removeAuctionImage(index, imageIndex)
+                                  }
+                                  color="error"
+                                  size="small"
+                                  sx={{
+                                    position: "absolute",
+                                    top: 4,
+                                    right: 4,
+                                    bgcolor: "rgba(255,255,255,0.8)",
+                                    "&:hover": {
+                                      bgcolor: "rgba(255,255,255,0.9)",
+                                    },
+                                  }}
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </Paper>
+                            </Grid>
+                          ))}
+                        </Grid>
+                      </Box>
+                    )}
+
+                    {/* Already uploaded images display */}
+                    {auction.uploadedImages &&
+                      auction.uploadedImages.length > 0 && (
+                        <Box mt={3}>
+                          <Typography variant="subtitle1" gutterBottom>
+                            Uploaded Images:
+                          </Typography>
+                          <Grid container spacing={2}>
+                            {auction.uploadedImages.map((url, imageIndex) => (
+                              <Grid item xs={6} sm={4} md={3} key={imageIndex}>
+                                <Paper
+                                  elevation={2}
+                                  sx={{
+                                    position: "relative",
+                                    height: 120,
+                                    overflow: "hidden",
+                                    borderRadius: 2,
+                                  }}
+                                >
+                                  <img
+                                    src={url}
+                                    alt={`uploaded-${imageIndex}`}
+                                    style={{
+                                      width: "100%",
+                                      height: "100%",
+                                      objectFit: "cover",
+                                    }}
+                                  />
+                                  <IconButton
+                                    onClick={() =>
+                                      removeUploadedAuctionImage(
+                                        index,
+                                        imageIndex
+                                      )
+                                    }
+                                    color="error"
+                                    size="small"
+                                    sx={{
+                                      position: "absolute",
+                                      top: 4,
+                                      right: 4,
+                                      bgcolor: "rgba(255,255,255,0.8)",
+                                      "&:hover": {
+                                        bgcolor: "rgba(255,255,255,0.9)",
+                                      },
+                                    }}
+                                  >
+                                    <DeleteIcon />
+                                  </IconButton>
+                                  <Box
+                                    sx={{
+                                      position: "absolute",
+                                      bottom: 0,
+                                      left: 0,
+                                      right: 0,
+                                      bgcolor: "rgba(0,0,0,0.6)",
+                                      color: "white",
+                                      p: 0.5,
+                                      textAlign: "center",
+                                      fontSize: "0.75rem",
+                                    }}
+                                  >
+                                    Uploaded
+                                  </Box>
+                                </Paper>
+                              </Grid>
+                            ))}
+                          </Grid>
+                        </Box>
+                      )}
+
+                    <Button
+                      onClick={() => handleAuctionImageUpload(index)}
+                      variant="contained"
+                      sx={{
+                        mt: 2,
+                        display: "flex",
+                        gap: 1,
+                        alignItems: "center",
+                      }}
+                      disabled={uploading || auction.images.length === 0}
+                      fullWidth
+                    >
+                      {uploading ? (
+                        <>
+                          <span className="spinner" /> Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <AddIcon /> Upload Auction Images
+                        </>
+                      )}
+                    </Button>
                   </Grid>
                   {auctions.length > 1 && (
                     <Grid item xs={12}>
