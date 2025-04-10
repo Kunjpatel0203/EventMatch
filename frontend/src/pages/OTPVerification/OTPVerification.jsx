@@ -177,7 +177,7 @@ const OTPVerification = ({ userDetails, onBackToLogin }) => {
               </Typography>
               {!isVerified && (
                 <Typography variant="body1" className="otp-subtitle">
-                  We've sent a 6-digit verification code to
+                  We have sent a 6-digit verification code to
                   <br />
                   <span className="otp-email">
                     {userDetails.email || "your email address"}
@@ -250,7 +250,7 @@ const OTPVerification = ({ userDetails, onBackToLogin }) => {
 
                 <div className="otp-resend-container">
                   <Typography variant="body2" className="otp-resend-text">
-                    Didn't receive the code?
+                    Did not receive the code?
                   </Typography>
                   {canResend ? (
                     <Button

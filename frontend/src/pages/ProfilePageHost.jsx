@@ -239,7 +239,7 @@ const ProfilePageHost = () => {
               >
                 <List>
                   {host.events.map((event) => (
-                    <ListItem key={event._id}>
+                    <ListItem key={event.id}>
                       <ListItemText
                         primary={event.title}
                         secondary={`Date: ${new Date(event.date).toLocaleDateString()} - Location: ${event.location}`}
@@ -259,38 +259,72 @@ const ProfilePageHost = () => {
             <Typography variant="h6" gutterBottom>
               Sponsored Events
             </Typography>
-            {host.participatedAuctions && host.participatedAuctions.length > 0 ? (
-              <Box
-                sx={{
-                  maxHeight: "160px",
-                  overflowY: "auto",
-                  border: "1px solid #ccc",
-                  padding: "8px",
-                  borderRadius: "4px",
-                }}
-              >
-                <List>
-                  {host.participatedAuctions.map((auction) => (
-                    <ListItem key={auction._id}>
-                      <ListItemText
-                        primary={auction.itemName}
-                        secondary={
-                          <>
-                            <Typography variant="body2">
-                              Date: {new Date(auction.createdAt).toLocaleDateString()} - Description: {auction.itemDescription}
-                            </Typography>
-                            <Typography variant="body2">
-                              Status: {auction.status} - Current Highest Bid: ${auction.currentHighestBid}
-                            </Typography>
-                          </>
-                        }
-                      />
-                    </ListItem>
-                  ))}
-                </List>
+            {host.participatedAuctions &&
+    host.participatedAuctions.filter(auction => {
+      // Check if current user is the highest bidder
+      if (auction.bids && auction.bids.length > 0) {
+        // Sort bids by amount in descending order
+        console.log(auction.bids)
+        const sortedBids = [...auction.bids].sort((a, b) => b.amount - a.amount);
+        //console.log("S",sortedBids)
+        // Get the highest bid
+        const highestBid = sortedBids[0];
+        console.log(highestBid.bidder)
+        console.log("h",hostId)
+        // Check if the current user is the highest bidder
+        return highestBid.bidder === hostId; // Adjust this based on how user ID is stored in bid objects
+      }
+      return false;
+    }).length > 0 ? (
+      <Box
+        sx={{
+          maxHeight: "160px",
+          overflowY: "auto",
+          border: "1px solid #ccc",
+          padding: "8px",
+          borderRadius: "4px",
+        }}
+      >
+        {host.participatedAuctions
+          .filter(auction => {
+            // Same filter logic as above
+            if (auction.bids && auction.bids.length > 0) {
+              const sortedBids = [...auction.bids].sort((a, b) => b.amount - a.amount);
+              const highestBid = sortedBids[0];
+              console.log(highestBid.bidder)
+              return highestBid.bidder === hostId;
+            }
+            return false;
+          })
+          .map((auction, index) => (
+            // Same rendering code as you had before
+            <Box
+              key={auction.id || index}
+              p={1}
+              borderBottom="1px solid #eee"
+              display="flex"
+              justifyContent="space-between"
+              alignItems="center"
+            >
+              <Box>
+                <Typography variant="subtitle2">
+                  {auction.itemName}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Date: {new Date(auction.createdAt).toLocaleDateString()}{" "}
+                  - Description: {auction.itemDescription}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Status: {auction.status} - Winning Bid: ₹
+                  {auction.currentHighestBid}
+                </Typography>
               </Box>
-            ) : (
-              <Typography>No events sponsored yet.</Typography>
+            </Box>
+          ))}
+      </Box>
+    ) : (
+      <Typography variant="body1">No events won yet.</Typography>
+    
             )}
           </Box>
         )}

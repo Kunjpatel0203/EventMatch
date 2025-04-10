@@ -13,7 +13,6 @@ import {
   Tabs,
   Tab,
   Divider,
-  Link,
   Tooltip,
 } from "@mui/material";
 import {
@@ -23,9 +22,9 @@ import {
   Cancel as CancelIcon,
 } from "@mui/icons-material";
 import InstagramIcon from "@mui/icons-material/Instagram";
-//import TwitterIcon from "@mui/icons-material/Twitter";
 import LinkedInIcon from "@mui/icons-material/LinkedIn";
 import XIcon from "@mui/icons-material/X";
+import ChatIcon from "@mui/icons-material/Chat";
 import { useNavigate } from "react-router-dom";
 
 export default function ProfilePage() {
@@ -45,7 +44,7 @@ export default function ProfilePage() {
         const response = await axios.get(
           `http://localhost:8080/api/user/${userId}`
         );
-        console.log(response.data);
+        console.log("user",response.data)
         setUserDetails(response.data);
         // Initialize edited details with current user data
         setEditedDetails(response.data);
@@ -97,12 +96,54 @@ export default function ProfilePage() {
       reader.onloadend = () => {
         const base64String = reader.result;
         setProfileImage(base64String);
+        localStorage.setItem("profileImage", base64String);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // Function to get social media profile URLs based on username
+  const handleEventChat = async (eventId, isEventChat) => {
+    try {
+      // Fetch event details first
+      console.log("E", eventId);
+      const eventResponse = await axios.get(
+        `http://localhost:8080/api/events/${eventId}`
+      );
+  
+      const eventDetails = eventResponse.data;
+      console.log("e", eventDetails);
+  
+      // Navigate to chat with full event details and a timestamp to force state change
+      navigate('/chat', {
+        state: {
+          eventDetails: {
+            eventId: eventDetails.id,
+            eventTitle: eventDetails.title,
+            roomId: `${eventId}`,
+            isEventChat: isEventChat,
+            timestamp: new Date().getTime() // Add timestamp to ensure state is seen as different
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching event details:', error);
+      // Fallback navigation if event fetch fails
+      navigate('/chat', {
+        state: {
+          eventDetails: {
+            eventId: eventId,
+            roomId: `${eventId}`,
+            eventTitle: "Event Chat",
+            isEventChat: isEventChat,
+            timestamp: new Date().getTime() // Add timestamp here too
+          }
+        }
+      });
+    }
+  };
+
+
+  // Function to get social media profile URLs
   const getSocialMediaUrl = (platform, username) => {
     if (!username) return null;
 
@@ -112,7 +153,6 @@ export default function ProfilePage() {
       case "twitter":
         return `https://x.com/${username}`;
       case "linkedin":
-        // LinkedIn can be username or full URL
         return username.includes("linkedin.com")
           ? username
           : `https://linkedin.com/in/${username}`;
@@ -191,35 +231,38 @@ export default function ProfilePage() {
               </Typography>
             </Box>
           </Box>
-          {!editMode ? (
-            <Button
-              variant="outlined"
-              startIcon={<EditIcon />}
-              onClick={handleEditClick}
-            >
-              Edit Profile
-            </Button>
-          ) : (
-            <Box>
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={<SaveIcon />}
-                onClick={handleSaveChanges}
-                sx={{ mr: 2 }}
-              >
-                Save
-              </Button>
-              <Button
-                variant="outlined"
-                color="error"
-                startIcon={<CancelIcon />}
-                onClick={handleCancelEdit}
-              >
-                Cancel
-              </Button>
-            </Box>
-          )}
+          <Box display="flex" alignItems="center" gap={2}>
+            {!editMode ? (
+              <>
+                <Button
+                  variant="outlined"
+                  startIcon={<EditIcon />}
+                  onClick={handleEditClick}
+                >
+                  Edit Profile
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<SaveIcon />}
+                  onClick={handleSaveChanges}
+                >
+                  Save
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<CancelIcon />}
+                  onClick={handleCancelEdit}
+                >
+                  Cancel
+                </Button>
+              </>
+            )}
+          </Box>
         </Box>
 
         <Divider sx={{ my: 3 }} />
@@ -319,7 +362,7 @@ export default function ProfilePage() {
                       />
                       <TextField
                         name="twitter"
-                        label="X Username" // Changed from "Twitter Username"
+                        label="X Username"
                         value={editedDetails.twitter || ""}
                         onChange={handleInputChange}
                         fullWidth
@@ -328,7 +371,7 @@ export default function ProfilePage() {
                         InputProps={{
                           startAdornment: (
                             <XIcon sx={{ mr: 1, color: "#000000" }} />
-                          ), // Changed color to black for X
+                          ),
                         }}
                       />
                       <TextField
@@ -369,23 +412,26 @@ export default function ProfilePage() {
                         </Tooltip>
                       )}
 
-{userDetails.twitter && (
-  <Tooltip title={`@${userDetails.twitter} on X`}> {/* Changed from "Twitter" */}
-    <IconButton 
-      component="a" 
-      href={getSocialMediaUrl('twitter', userDetails.twitter)} 
-      target="_blank"
-      rel="noopener noreferrer"
-      color="inherit"
-      sx={{ 
-        color: "#000000", // Changed from Twitter blue to black for X
-        "&:hover": { transform: "scale(1.1)" }
-      }}
-    >
-      <XIcon fontSize="large" />
-    </IconButton>
-  </Tooltip>
-)}
+                      {userDetails.twitter && (
+                        <Tooltip title={`@${userDetails.twitter} on X`}>
+                          <IconButton
+                            component="a"
+                            href={getSocialMediaUrl(
+                              "twitter",
+                              userDetails.twitter
+                            )}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            color="inherit"
+                            sx={{
+                              color: "#000000",
+                              "&:hover": { transform: "scale(1.1)" },
+                            }}
+                          >
+                            <XIcon fontSize="large" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
 
                       {userDetails.linkedin && (
                         <Tooltip title="LinkedIn Profile">
@@ -440,15 +486,28 @@ export default function ProfilePage() {
               >
                 {userDetails.events.map((event, index) => (
                   <Box
-                    key={event._id || index}
+                    key={event.id || index}
                     p={1}
                     borderBottom="1px solid #eee"
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="center"
                   >
-                    <Typography variant="subtitle2">{event.title}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Date: {new Date(event.date).toLocaleDateString()} -
-                      Location: {event.location}
-                    </Typography>
+                    <Box>
+                      <Typography variant="subtitle2">{event.title}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Date: {new Date(event.date).toLocaleDateString()} -
+                        Location: {event.location}
+                      </Typography>
+                    </Box>
+                    <Button
+                      variant="outlined"
+                      startIcon={<ChatIcon />}
+                      size="small"
+                      onClick={() => handleEventChat(event.id, true)}
+                    >
+                      Event Chat
+                    </Button>
                   </Box>
                 ))}
               </Box>
@@ -464,39 +523,78 @@ export default function ProfilePage() {
               Sponsored Events
             </Typography>
             {userDetails.participatedAuctions &&
-            userDetails.participatedAuctions.length > 0 ? (
-              <Box
-                sx={{
-                  maxHeight: "160px",
-                  overflowY: "auto",
-                  border: "1px solid #ccc",
-                  padding: "8px",
-                  borderRadius: "4px",
-                }}
-              >
-                {userDetails.participatedAuctions.map((auction, index) => (
-                  <Box
-                    key={auction._id || index}
-                    p={1}
-                    borderBottom="1px solid #eee"
-                  >
-                    <Typography variant="subtitle2">
-                      {auction.itemName}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Date: {new Date(auction.createdAt).toLocaleDateString()} -
-                      Description: {auction.itemDescription}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Status: {auction.status} - Current Highest Bid: $
-                      {auction.currentHighestBid}
-                    </Typography>
-                  </Box>
-                ))}
+    userDetails.participatedAuctions.filter(auction => {
+      // Check if current user is the highest bidder
+      if (auction.bids && auction.bids.length > 0) {
+        // Sort bids by amount in descending order
+        console.log(auction.bids)
+        const sortedBids = [...auction.bids].sort((a, b) => b.amount - a.amount);
+        //console.log("S",sortedBids)
+        // Get the highest bid
+        const highestBid = sortedBids[0];
+        console.log(highestBid.bidder)
+        // Check if the current user is the highest bidder
+        return highestBid.bidder === userId; // Adjust this based on how user ID is stored in bid objects
+      }
+      return false;
+    }).length > 0 ? (
+      <Box
+        sx={{
+          maxHeight: "160px",
+          overflowY: "auto",
+          border: "1px solid #ccc",
+          padding: "8px",
+          borderRadius: "4px",
+        }}
+      >
+        {userDetails.participatedAuctions
+          .filter(auction => {
+            // Same filter logic as above
+            if (auction.bids && auction.bids.length > 0) {
+              const sortedBids = [...auction.bids].sort((a, b) => b.amount - a.amount);
+              const highestBid = sortedBids[0];
+              console.log(highestBid.bidder)
+              return highestBid.bidder === userId;
+            }
+            return false;
+          })
+          .map((auction, index) => (
+            // Same rendering code as you had before
+            <Box
+              key={auction.id || index}
+              p={1}
+              borderBottom="1px solid #eee"
+              display="flex"
+              justifyContent="space-between"
+              alignItems="center"
+            >
+              <Box>
+                <Typography variant="subtitle2">
+                  {auction.itemName}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Date: {new Date(auction.createdAt).toLocaleDateString()}{" "}
+                  - Description: {auction.itemDescription}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Status: {auction.status} - Your Winning Bid: ₹
+                  {auction.currentHighestBid}
+                </Typography>
               </Box>
-            ) : (
-              <Typography variant="body1">No events sponsored yet.</Typography>
-            )}
+              <Button
+                variant="outlined"
+                startIcon={<ChatIcon />}
+                size="small"
+                onClick={() => handleEventChat(auction.event.id, false)}
+              >
+                Event Chat
+              </Button>
+            </Box>
+          ))}
+      </Box>
+    ) : (
+      <Typography variant="body1">No events won yet.</Typography>
+    )}
           </Box>
         )}
 

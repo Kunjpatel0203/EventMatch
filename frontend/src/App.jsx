@@ -1,8 +1,20 @@
 import "./App.css";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
-import CssBaseline from '@mui/material/CssBaseline';
+import CssBaseline from "@mui/material/CssBaseline";
+import Header from "./components/Header";
+import SponsorsPage from "./pages/Sponspors/SponsorsPage";
+import Footer from "./components/Footer";
+import LandingPage from "./pages/LandingPage";
 import AuthPage from "./pages/Auth/AuthPage";
+import EventListing from "./pages/EventListings";
+import CreateEventPage from "./pages/CreateEventPage";
+import EventDetailsPage from "./pages/EventsDetailsPage";
+import AuctionBiddingPage from "./pages/AuctionBiddingPage";
+import ProfilePage from "./pages/ProfilePage";
+import ProfilePageHost from "./pages/ProfilePageHost";
+import ChatPage from "./pages/ChatPage";
+import PaymentResultPage from "./pages/PaymentResultPage";
 
 const theme = createTheme({
   palette: {
@@ -38,18 +50,32 @@ const theme = createTheme({
 
 function App() {
   return (
-    <>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
 
-        <Router>
-          <Routes>
-            <Route path="/" element={<AuthPage />} />
-          </Routes>
-          <div className="p-3"></div>
-        </Router>
-      </ThemeProvider>
-    </>
+      <Router>
+        <Header />
+        <Routes>
+          <Route path="/" element={<AuthPage />} />
+          <Route path="/landing" element={<LandingPage />} />
+          <Route path="/create-event" element={<CreateEventPage />} />
+          <Route path="/sponsors" element={<SponsorsPage />} />
+          <Route path="/events" element={<EventListing />} />
+          <Route path="/events/:eventId" element={<EventDetailsPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route
+            path="/events/:eventId/auctions/:auctionId"
+            element={<AuctionBiddingPage />}
+          />
+          <Route path="/profile/:hostId" element={<ProfilePageHost />} />
+          <Route path="chat" element={<ChatPage />}/>
+          <Route path="/payment-success" element={<PaymentResultPage />} />
+          <Route path="/payment-cancel" element={<PaymentResultPage />} />
+        </Routes>
+        <div className="p-3"></div>
+        <Footer />
+      </Router>
+    </ThemeProvider>
   );
 }
 
